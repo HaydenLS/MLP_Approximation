@@ -45,46 +45,48 @@ class MLP:
     def __init__(self, input_dim, l1_dim, output_dim):
         # Инициализация весов
         # Веса входного нейрона
-        self.weights_input_hidden = np.random.rand(input_dim, l1_dim) - 0.5
+        self.weights_l1 = np.random.rand(input_dim, l1_dim) - 0.5
+
         # Веса выходного нейрона у которой количество строк - количество нейронов в скрытом слое
-        # Т.е. данная матрица имеет hidden_dim весов, например если нейронов в скр слое 5, то будет 5 весов
-        self.weights_hidden_output = np.random.rand(l1_dim, output_dim) - 0.5
+        self.weights_output = np.random.rand(l1_dim, output_dim) - 0.5
 
         # Сдвиги
         # Сдвиг для входного слоя - матрица 1 x hidden_dim, т е для каждого нейрона свой сдвиг.
-        self.bias_hidden = np.zeros((1, l1_dim))
+        self.bias_l1 = np.zeros((1, l1_dim))
         # Сдвиг для выходного слоя, если в выходном слое 1 нейрон то сдвиг тоже 1 параметр.
         self.bias_output = np.zeros((1, output_dim))
 
     def forward(self, X, activate_function):
         # Прямое распространение
 
-        # Значения, попадающие на вход в скрытый слой
-        self.hidden_input = np.dot(X, self.weights_input_hidden) + self.bias_hidden
-        # Значения, на выходе из скрытого слоя, то есть функция hi = f(X*wi), где i - это i-ое значение матрицы входных точек
-        self.hidden_output = activate_function(self.hidden_input)
+        self.activate_0 = X
 
-        # Входные значения в выходной слой
-        # otput_input будет выглядеть примерно так для 3 нейронов - out = h1*w4 + h2*w5 + h3*w6 + b1
-        self.output_input = np.dot(self.hidden_output, self.weights_hidden_output) + self.bias_output
-        self.output = self.output_input  # Линейная активация для регрессии
-        return self.output
+        # Значения для скрытого слоя
+        self.z_1 = self.activate_0 @ self.weights_l1 + self.bias_l1
+        self.activate_1 = activate_function(self.z_1)
+
+        # Выходной слой
+        self.z_output = self.activate_1 @ self.weights_output + self.bias_output
+        self.activate_output = self.z_output # Линейная активация
+
+
+        return self.activate_output
 
     def backward(self, X, y, lr, activate_derivative):
-        # Ошибка = y - y_pred
-        error = self.output - y
-        # Градиенты
-        # Градиент функции активации рассчитываем по цепному правилу.
-        output_grad = error
-        hidden_error = np.dot(output_grad, self.weights_hidden_output.T)
-        hidden_grad = hidden_error * activate_derivative(self.hidden_input)
+        # Дельта на выходе
+        delta_output = self.activate_output - y
+
+        # Дельта на скрытом слое
+        delta_1_input = delta_output @ self.weights_output.T
+        delta_1 = delta_1_input * activate_derivative(self.z_1)
 
         # Обновление весов
-        self.weights_hidden_output -= lr * np.dot(self.hidden_output.T, output_grad)
-        self.bias_output -= lr * np.sum(output_grad, axis=0, keepdims=True)
+        self.weights_l1 -= lr * (self.activate_0.T @ delta_1)
+        self.bias_l1 -= lr * np.sum(delta_1, axis=0, keepdims=True)
 
-        self.weights_input_hidden -= lr * np.dot(X.T, hidden_grad)
-        self.bias_hidden -= lr * np.sum(hidden_grad, axis=0, keepdims=True)
+        self.weights_output -= lr * (self.activate_1.T @ delta_output)
+        self.bias_output -= lr * np.sum(delta_output, axis=0, keepdims=True)
+
 
 
     # Mean Squared Error
@@ -204,10 +206,6 @@ class DoubleLayerMLP(MLP):
 
 
 
-
-
-
-
 # Пример функции
 def func(x):
     #return np.sin(x / 2) + np.cos(x) ** 2
@@ -224,15 +222,15 @@ input_dim = 1
 l1_dim = 5
 l2_dim = 5
 output_dim = 1
-#model = MLP(input_dim, l1_dim, output_dim)
-model = DoubleLayerMLP(input_dim, l1_dim, l2_dim, output_dim)
+model = MLP(input_dim, l1_dim, output_dim)
+#model = DoubleLayerMLP(input_dim, l1_dim, l2_dim, output_dim)
 
 
 # Обучение модели
 activate_function = AF.tanh
 activate_derivative = AF.tanh_derivative
-model.train(X, y_true, 0.001, 5000, activate_function, activate_derivative)
-#model.train_SDG(X, y_true, 0.01, 5000, 20, activate_function, activate_derivative)
+#model.train(X, y_true, 0.001, 5000, activate_function, activate_derivative)
+model.train_SDG(X, y_true, 0.01, 5000, 20, activate_function, activate_derivative)
 
 # График функции после обучения
 plt.plot(X, y_true, label="Actual function")
